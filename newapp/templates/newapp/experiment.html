@@ -1,0 +1,298 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f5f7;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 900px;
+            height: 95vh;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        /* Header */
+        .chat-header {
+            padding: 20px;
+            background: #202123;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        /* Chat messages */
+        .chat-messages {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 14px 18px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 15px;
+            word-wrap: break-word;
+        }
+
+        /* User message - Right */
+        .user-message {
+            align-self: flex-end;
+            background: #2563eb;
+            color: white;
+            border-bottom-right-radius: 3px;
+        }
+
+        /* AI message - Left */
+        .bot-message {
+            align-self: flex-start;
+            background: #f0f0f0;
+            color: #222;
+            border-bottom-left-radius: 3px;
+        }
+
+        /* Input area */
+        .chat-input-area {
+            padding: 18px 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 12px;
+            background: white;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 14px 18px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 15px;
+        }
+
+        .chat-input:focus {
+            border-color: #2563eb;
+        }
+
+        .send-btn {
+            padding: 0 25px;
+            border: none;
+            border-radius: 25px;
+            background: #2563eb;
+            color: white;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .send-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .typing {
+            color: #888;
+            font-size: 14px;
+            align-self: flex-start;
+        }
+
+        @media (max-width: 600px) {
+            .chat-container {
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="chat-container">
+
+        <div class="chat-header">
+            AI Chatbot
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+
+            <div class="message bot-message">
+                Hello! 👋 How can I help you today?
+            </div>
+
+        </div>
+
+        {% csrf_token %}
+
+        <div class="chat-input-area">
+
+            <input
+                type="text"
+                id="messageInput"
+                class="chat-input"
+                placeholder="Type your message..."
+            >
+
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                Send
+            </button>
+
+        </div>
+
+    </div>
+
+    <script>
+
+        const messageInput = document.getElementById("messageInput");
+        const chatMessages = document.getElementById("chatMessages");
+        const sendBtn = document.getElementById("sendBtn");
+
+        let chatHistory = []
+
+        function addMessage(message, sender) {
+
+            const messageDiv = document.createElement("div");
+
+            messageDiv.classList.add("message");
+
+            if (sender === "user") {
+                messageDiv.classList.add("user-message");
+            } else {
+                messageDiv.classList.add("bot-message");
+            }
+
+            messageDiv.textContent = message;
+
+            chatMessages.appendChild(messageDiv);
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        
+        async function sendMessage() {
+
+            
+
+            const message = messageInput.value.trim();
+
+            if (!message) return;
+
+            // Display user message immediately
+            addMessage(message, "user");
+
+            // Clear input
+            messageInput.value = "";
+
+            // Update history
+            chatHistory.push({
+                role: "user",
+                content: message
+            });
+
+            // Show typing indicator
+            const typing = document.createElement("div");
+            typing.classList.add("typing");
+            typing.textContent = "AI is thinking...";
+
+            chatMessages.appendChild(typing);
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            sendBtn.disabled = true;
+
+            try {
+
+                const csrfToken = document.querySelector(
+                    '[name=csrfmiddlewaretoken]'
+                ).value;
+
+                const response = await fetch("{% url 'chatbot' %}", {
+
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken
+                    },
+
+                    body: JSON.stringify({
+                        message: message,
+                        chatHistory: chatHistory
+                    })
+
+                });
+
+                if (!response.ok) {
+                    throw new Error("Server error: " + response.status);
+                }
+
+                const data = await response.json();
+
+                // Update conversation history
+                chatHistory.push({
+                    role: "assistant",
+                    content: data.response
+                });
+
+                // Display AI response
+                addMessage(data.response, "bot");
+
+            } catch (error) {
+
+                console.error(error);
+                addMessage("Something went wrong. Please try again.", "bot");
+
+            } finally {
+
+                typing.remove();
+                sendBtn.disabled = false;
+
+            }
+        }
+
+
+        // Send message on Enter key
+        messageInput.addEventListener("keydown", function(event) {
+
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+
+        });
+
+    </script>
+
+</body>
+</html>
